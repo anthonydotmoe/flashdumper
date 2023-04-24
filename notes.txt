@@ -1,0 +1,23 @@
+S29GL256P
+256 128kbyte sectors
+100ns
+Pb-free
+-40c to +85c
+2.7 to 3.6v
+highest address sector protected
+
+Read
+----
+
+T=0
+CE	OE	WE	RESET	WP/ACC	Addr
+H	O	H	H	X	Ain
+
+
+1. Pull reset low for some time, then back to high
+2. WE must be high (leave it high at all times)
+3. Address line selection
+4. Pull CE low (chip enable)
+5. Pull OE low
+6. Read data
+7. Bring CE, OE back high.
