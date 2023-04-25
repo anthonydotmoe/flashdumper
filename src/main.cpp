@@ -144,7 +144,7 @@ void init_pins() {
 
 void flash_set_addr_pins(uint32_t addr) {
   addr ^= 1; // Correct endianness since we're using byte mode
-  for (int i = 1; i < 23; i++) {
+  for (int i = 0; i < 23; i++) {
     digitalWrite(ADDR_PINS[i], (addr >> i) & 0x01);
   }
 }
