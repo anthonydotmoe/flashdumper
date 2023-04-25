@@ -78,10 +78,18 @@ void setup() {
 
 void loop() {
   Serial.println("Start of flash rom");
-
+  
+  char hexbuf[8];
   int count = 0;
+
   for(uint32_t i = 0; i < 0x2000000; i++) {
-    Serial.print(flash_read_byte(i), HEX);
+    if(count == 0) {
+      snprintf(hexbuf, 8, "%07" PRIX32, i);
+      Serial.print(hexbuf);
+      Serial.print(":\t");
+    }
+    snprintf(hexbuf, 8, "%02X", flash_read_byte(i));
+    Serial.print(hexbuf);
     count++;
 
     if(count < 8) {
