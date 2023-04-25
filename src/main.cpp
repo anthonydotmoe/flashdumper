@@ -3,6 +3,9 @@
 /*
 
    Connect the arduino as follows:
+   
+   Arduino        --- Flash
+   -------            -----
    PA0  (D22)     --- A-1 (DQ15)
    PA1  (D23)     --- A0
    PA2  (D24)     --- A1
@@ -74,6 +77,23 @@ void setup() {
 }
 
 void loop() {
+  Serial.println("Start of flash rom");
+
+  int count = 0;
+  for(uint32_t i = 0; i < 0x2000000; i++) {
+    Serial.print(flash_read_byte(i), HEX);
+    count++;
+
+    if(count < 8) {
+      Serial.print(" ");
+    } else {
+      Serial.print("\n");
+      count = 0;
+    }
+  }
+  
+  Serial.print("\n");
+  Serial.println("End of flash rom");
 }
 
 void flash_reset() {
@@ -110,7 +130,7 @@ void init_pins() {
   digitalWrite(PINS_WP, LOW);
   digitalWrite(PINS_BYTE, LOW);
 
-  flash_set_addr_pins(0x1ffffff);
+  flash_set_addr_pins(0x0000000);
   flash_reset();
 }
 
