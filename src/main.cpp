@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <SPI.h>
+#include <Ethernet.h>
 
 /*
 
@@ -53,8 +55,13 @@
 
 */
 
-const int ADDR_PINS[] = {22, 23, 24, 25, 26, 27, 28, 37, 36, 35, 34, 33, 32, 31, 30, 49, 48, 47, 46, 45, 44, 43, 42};
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+IPAddress ip(192, 168, 6, 177);
+EthernetServer server(80);
+
+const int ADDR_PINS[] = {22, 23, 24, 25, 26, 27, 28, 29, 37, 36, 35, 34, 33, 32, 31, 30, 49, 48, 47, 46, 45, 44, 43, 42, 41};
 const int DATA_PINS[] = {62, 63, 64, 65, 66, 67, 68, 69};
+const int NUM_ADDR_PINS = sizeof(ADDR_PINS) / sizeof(ADDR_PINS[0]);
 
 const int PINS_CE    = 54;
 const int PINS_OE    = 55;
@@ -66,6 +73,7 @@ const int PINS_BYTE  = 59;
 void init_pins();
 
 void flash_set_addr_pins(uint32_t addr);
+void flash_read_page(uint32_t address, uint8_t *buffer, size_t length);
 uint8_t flash_read_byte(uint32_t addr);
 void flash_reset();
 
@@ -74,34 +82,86 @@ void setup() {
 
   Serial.begin(115200);
   while(!Serial);
+  
+  Ethernet.begin(mac, ip);
+}
+
+void send_flash_data(EthernetClient &client, const uint32_t start_address, const uint32_t size) {
+  const size_t page_size = 16; // 16 bytes for the S29GL256P
+  uint8_t buffer[page_size];
+
+  // Send flash content
+  for (uint32_t address = start_address; address < size; address += page_size) {
+    flash_read_page(address, buffer, page_size);
+    client.write(buffer, page_size);
+  }
 }
 
 void loop() {
-  Serial.println("Start of flash rom");
-  
-  char hexbuf[8];
-  int count = 0;
+  EthernetClient client = server.available(); // Check if a client has connected
+  if (client) {
+    bool request_line_saved = false;
+    Serial.println("Client connected");
 
-  for(uint32_t i = 0; i < 0x2000000; i++) {
-    if(count == 0) {
-      snprintf(hexbuf, 8, "%07" PRIX32, i);
-      Serial.print(hexbuf);
-      Serial.print(":\t");
-    }
-    snprintf(hexbuf, 8, "%02X", flash_read_byte(i));
-    Serial.print(hexbuf);
-    count++;
+    String currentLine = "";
+    String request = "";
+    bool isHeaderEnd = false;
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        if (c == '\n') {
+          if(!request_line_saved) {
+            request = currentLine;
+            request_line_saved = true;
+            Serial.println(request);
+          }
+          if (currentLine.length() == 0) { // End of HTTP headers
+            isHeaderEnd = true;
+          }
+          currentLine = "";
+        } else if (c != '\r') {
+          currentLine += c;
+        }
+      }
 
-    if(count < 8) {
-      Serial.print(" ");
-    } else {
-      Serial.print("\n");
-      count = 0;
+      if (isHeaderEnd) {
+        if (request.startsWith("GET /flash.bin")) {
+          Serial.println("Sending flash contents");
+          // Send the flash data with the appropriate headers
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-Type: application/octet-stream");
+          client.println("Connection: close");
+          client.print("Content-Length: ");
+          client.println(0x2000000); // Set this to the actual flash size
+          client.println();
+          send_flash_data(client, 0, 0x2000000); // Set this to the actual flash size
+        } else {
+          // Send the HTML page with the download link
+          Serial.println("Sending homepage");
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-Type: text/html");
+          client.println("Connection: close");
+          client.println();
+
+          client.println("<!DOCTYPE HTML>");
+          client.println("<html>");
+          client.println("<head>");
+          client.println("<title>Flash Download</title>");
+          client.println("</head>");
+          client.println("<body>");
+          client.println("<h1>Download Flash Contents</h1>");
+          client.println("<p><a href=\"/flash.bin\" download>Download Flash Data</a></p>");
+          client.println("</body>");
+          client.println("</html>");
+        }
+        break;
+      }
     }
+
+    delay(1); // Give the client time to receive the data
+    client.stop(); // Close the connection
+    Serial.println("Client disconnected");
   }
-  
-  Serial.print("\n");
-  Serial.println("End of flash rom");
 }
 
 void flash_reset() {
@@ -113,7 +173,7 @@ void flash_reset() {
 
 void init_pins() {
   // set pin mode for address lines to output
-  for (int i = 0; i < 23; i++) {
+  for (int i = 0; i < NUM_ADDR_PINS; i++) {
     pinMode(ADDR_PINS[i], OUTPUT);
   }
 
@@ -144,7 +204,7 @@ void init_pins() {
 
 void flash_set_addr_pins(uint32_t addr) {
   addr ^= 1; // Correct endianness since we're using byte mode
-  for (int i = 0; i < 23; i++) {
+  for (int i = 0; i < NUM_ADDR_PINS; i++) {
     digitalWrite(ADDR_PINS[i], (addr >> i) & 0x01);
   }
 }
@@ -154,18 +214,41 @@ uint8_t flash_read_byte(uint32_t addr) {
 
   flash_set_addr_pins(addr);
   digitalWrite(PINS_CE, LOW);
-  delayMicroseconds(1);
+//  delayMicroseconds(1);
   digitalWrite(PINS_OE, LOW);
-  delayMicroseconds(1);
+//  delayMicroseconds(7);
 
   for (int i = 0; i < 8; i++) {
     data |= digitalRead(DATA_PINS[i]) << i;
   }
 
-  delayMicroseconds(1);
+//  delayMicroseconds(1);
   digitalWrite(PINS_CE, HIGH);
-  delayMicroseconds(1);
+//  delayMicroseconds(1);
   digitalWrite(PINS_OE, HIGH);
 
   return data;
+}
+
+void flash_read_page(uint32_t address, uint8_t *buffer, size_t length) {
+  digitalWrite(PINS_CE, LOW);
+  digitalWrite(PINS_OE, LOW);
+
+  // Set the higher address bits (A23 to A3)
+  uint32_t pageAddress = address & 0xFFFFF8;
+  flash_set_addr_pins(pageAddress);
+
+  // Read the specified number of bytes into the buffer
+  for (size_t i = 0; i < length; i++) {
+    // Set the lower address bits (A2 to A-1)
+    uint32_t intraPageAddress = (address + i);
+    flash_set_addr_pins(intraPageAddress);
+
+    delayMicroseconds(1);
+    // Read the byte
+    buffer[i] = PINK;
+  }
+
+  digitalWrite(PINS_CE, HIGH);
+  digitalWrite(PINS_OE, HIGH);
 }
