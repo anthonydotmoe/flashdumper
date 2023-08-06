@@ -59,6 +59,8 @@ byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 IPAddress ip(192, 168, 6, 177);
 EthernetServer server(80);
 
+const uint32_t FLASH_SIZE = 0x200000;
+
 const int ADDR_PINS[] = {22, 23, 24, 25, 26, 27, 28, 29, 37, 36, 35, 34, 33, 32, 31, 30, 49, 48, 47, 46, 45, 44, 43, 42, 41};
 const int DATA_PINS[] = {62, 63, 64, 65, 66, 67, 68, 69};
 const int NUM_ADDR_PINS = sizeof(ADDR_PINS) / sizeof(ADDR_PINS[0]);
@@ -132,9 +134,9 @@ void loop() {
           client.println("Content-Type: application/octet-stream");
           client.println("Connection: close");
           client.print("Content-Length: ");
-          client.println(0x2000000); // Set this to the actual flash size
+          client.println(FLASH_SIZE); // Set this to the actual flash size
           client.println();
-          send_flash_data(client, 0, 0x2000000); // Set this to the actual flash size
+          send_flash_data(client, 0, FLASH_SIZE); // Set this to the actual flash size
         } else {
           // Send the HTML page with the download link
           Serial.println("Sending homepage");
