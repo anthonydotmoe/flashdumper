@@ -204,9 +204,10 @@ void init_pins() {
 
 void flash_set_addr_pins(uint32_t addr) {
   addr ^= 1; // Correct endianness since we're using byte mode
-  for (int i = 0; i < NUM_ADDR_PINS; i++) {
-    digitalWrite(ADDR_PINS[i], (addr >> i) & 0x01);
-  }
+  PORTA = (PORTA & 0x03) | ((addr & 0xFF) << 2);
+  PORTC = (addr >> 8) & 0xFF;
+  PORTL = (addr >> 16) & 0xFF;
+  PORTG = (addr >> 24) & 0x01;
 }
 
 uint8_t flash_read_byte(uint32_t addr) {
@@ -231,8 +232,8 @@ uint8_t flash_read_byte(uint32_t addr) {
 }
 
 void flash_read_page(uint32_t address, uint8_t *buffer, size_t length) {
-  digitalWrite(PINS_CE, LOW);
-  digitalWrite(PINS_OE, LOW);
+  PORTF &= ~_BV(PF0); // CE low
+  PORTF &= ~_BV(PF1); // OE low
 
   // Set the higher address bits (A23 to A3)
   uint32_t pageAddress = address & 0xFFFFF8;
@@ -249,6 +250,6 @@ void flash_read_page(uint32_t address, uint8_t *buffer, size_t length) {
     buffer[i] = PINK;
   }
 
-  digitalWrite(PINS_CE, HIGH);
-  digitalWrite(PINS_OE, HIGH);
+  PORTF |= _BV(PF0); // CE high
+  PORTF |= _BV(PF1); // OE high
 }
